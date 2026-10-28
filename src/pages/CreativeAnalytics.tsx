@@ -25,16 +25,17 @@ export function CreativeAnalyticsPage() {
     if (!accountId && accounts.data?.length) setAccountId(accounts.data[0].id);
   }, [accounts.data, accountId]);
 
-  const account = accounts.data?.find((a) => a.id === accountId);
-  const currency = account?.currency ?? "USD";
+  // Todo se muestra en USD; la función convierte desde la moneda de la cuenta.
+  const currency = "USD";
   const range = periodRange(period);
 
   const ads = useAsync(
-    () => (accountId ? fetchAds(accountId, range.since, range.until, period) : Promise.resolve([])),
+    () => (accountId ? fetchAds(accountId, range.since, range.until, period) : Promise.resolve(undefined)),
     [accountId, range.since, range.until],
   );
+  const fx = ads.data?.fx;
 
-  const derived = useMemo(() => (ads.data ?? []).map((r) => deriveAd(r, conversion)), [ads.data, conversion]);
+  const derived = useMemo(() => (ads.data?.ads ?? []).map((r) => deriveAd(r, conversion)), [ads.data, conversion]);
   const summary = useMemo(() => summarize(derived), [derived]);
   const top = useMemo(() => [...derived].sort((a, b) => b.spend - a.spend).slice(0, topN), [derived, topN]);
 
@@ -57,7 +58,7 @@ export function CreativeAnalyticsPage() {
           {accounts.loading && <option>Cargando cuentas…</option>}
           {accounts.data?.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} ({a.id.replace("act_", "")})
+              {a.name} ({a.id.replace("act_", "")}){a.currency !== "USD" ? ` · ${a.currency}` : ""}
             </option>
           ))}
         </select>
@@ -76,6 +77,11 @@ export function CreativeAnalyticsPage() {
 
         <div className="text-muted text-xs">
           {range.since} → {range.until}
+          {fx && fx.from !== "USD" && (
+            <span className="ml-2" title="Se usa la cotización de hoy para todo el período">
+              · USD (1 USD = {fx.rate.toLocaleString("es-AR")} {fx.from}, {fx.source})
+            </span>
+          )}
         </div>
 
         <button

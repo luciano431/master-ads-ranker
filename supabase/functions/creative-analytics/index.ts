@@ -4,19 +4,20 @@
 // dashboard de producción. Reutiliza el mismo secreto META_ACCESS_TOKEN.
 //
 // POST { mode: "accounts" }
-//   -> { accounts: [{ id, name, currency, status }] }
+//   -> { accounts: [{ id, name, currency, status }] }   solo cuentas del portfolio (Business Manager)
 // POST { mode: "ads", account_id, since, until }
-//   -> { ads: AdRow[] }   (métricas crudas; CPA/ROAS/CTR/CPC se derivan en el front)
+//   -> { ads: AdRow[], fx }   montos convertidos a USD; CPA/ROAS/CTR/CPC se derivan en el front
 
 const META_API_VERSION = Deno.env.get("META_API_VERSION") ?? "v23.0";
 const GRAPH = `https://graph.facebook.com/${META_API_VERSION}`;
 const TOKEN = Deno.env.get("META_ACCESS_TOKEN") ?? "";
 
-// Opcional: lista separada por comas de cuentas permitidas (act_123,act_456).
-const ALLOWED = (Deno.env.get("ALLOWED_ACCOUNT_IDS") ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+// Portfolio (Business Manager) cuyas cuentas se muestran. Por ID si está, si no por nombre.
+const BUSINESS_ID = Deno.env.get("META_BUSINESS_ID") ?? "";
+const BUSINESS_NAME = Deno.env.get("META_BUSINESS_NAME") ?? "Ranker Studio";
+
+// Cotización para pasar ARS a USD: oficial | blue | bolsa (MEP) | contadoconliqui | tarjeta.
+const ARS_RATE_TYPE = Deno.env.get("ARS_USD_RATE_TYPE") ?? "oficial";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -85,21 +86,37 @@ async function graphAll(path: string, params: Record<string, string>, max = 5000
 // Caché por isolate: evita golpear Meta al cambiar de métrica o recargar.
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const cache = new Map<string, { at: number; value: unknown }>();
-async function cached<T>(key: string, fn: () => Promise<T>): Promise<T> {
+async function cached<T>(key: string, fn: () => Promise<T>, ttl = CACHE_TTL_MS): Promise<T> {
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
+  if (hit && Date.now() - hit.at < ttl) return hit.value as T;
   const value = await fn();
   cache.set(key, { at: Date.now(), value });
   return value;
 }
 
+async function resolveBusinessId() {
+  if (BUSINESS_ID) return BUSINESS_ID;
+  const businesses = await graphAll("me/businesses", { fields: "id,name", limit: "100" });
+  const match = businesses.find((b) => b.name?.trim().toLowerCase() === BUSINESS_NAME.toLowerCase());
+  if (!match) {
+    const names = businesses.map((b) => b.name).join(", ") || "ninguno";
+    throw new Error(`No se encontró el portfolio "${BUSINESS_NAME}". Portfolios visibles: ${names}`);
+  }
+  return match.id as string;
+}
+
+// Cuentas propias del portfolio + cuentas de clientes compartidas con él.
 async function listAccounts() {
-  const rows = await graphAll("me/adaccounts", {
-    fields: "id,name,currency,account_status",
-    limit: "200",
-  });
-  return rows
-    .filter((a) => ALLOWED.length === 0 || ALLOWED.includes(a.id))
+  const businessId = await resolveBusinessId();
+  const params = { fields: "id,name,currency,account_status", limit: "200" };
+  const [owned, client] = await Promise.all([
+    graphAll(`${businessId}/owned_ad_accounts`, params),
+    graphAll(`${businessId}/client_ad_accounts`, params),
+  ]);
+  const byId = new Map<string, any>();
+  for (const a of [...owned, ...client]) byId.set(a.id, a);
+  return [...byId.values()]
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
     .map((a) => ({
       id: a.id as string,
       name: a.name as string,
@@ -126,6 +143,25 @@ async function fetchCreatives(adIds: string[]) {
   const map = new Map<string, any>();
   for (const r of results) for (const [id, ad] of Object.entries(r)) map.set(id, ad);
   return map;
+}
+
+// Unidades de `currency` por 1 USD. ARS usa dolarapi.com (cotización argentina elegida);
+// el resto, open.er-api.com. Cacheado 1h.
+async function usdRate(currency: string) {
+  if (currency === "USD") return { rate: 1, source: "USD" };
+  return cached(`fx:${currency}`, async () => {
+    if (currency === "ARS") {
+      const res = await fetch(`https://dolarapi.com/v1/dolares/${ARS_RATE_TYPE}`);
+      const body = await res.json();
+      if (!res.ok || !body.venta) throw new Error(`No se pudo obtener el dólar ${ARS_RATE_TYPE}`);
+      return { rate: Number(body.venta), source: `dólar ${ARS_RATE_TYPE} (venta)` };
+    }
+    const res = await fetch("https://open.er-api.com/v6/latest/USD");
+    const body = await res.json();
+    const rate = body.rates?.[currency];
+    if (!rate) throw new Error(`Sin cotización para ${currency}`);
+    return { rate: Number(rate), source: "open.er-api.com" };
+  }, 60 * 60 * 1000);
 }
 
 async function listAds(accountId: string, since: string, until: string) {
@@ -183,11 +219,19 @@ Deno.serve(async (req) => {
       if (!DATE_RE.test(since) || !DATE_RE.test(until)) {
         return json({ error: "since/until deben ser YYYY-MM-DD" }, 400);
       }
-      if (ALLOWED.length > 0 && !ALLOWED.includes(id)) {
-        return json({ error: "Cuenta no permitida" }, 403);
-      }
+      // Solo se pueden consultar cuentas del portfolio.
+      const accounts = await cached("accounts", listAccounts);
+      const account = accounts.find((a) => a.id === id);
+      if (!account) return json({ error: "La cuenta no pertenece al portfolio" }, 403);
+
       const ads = await cached(`ads:${id}:${since}:${until}`, () => listAds(id, since, until));
-      return json({ ads });
+      const fx = await usdRate(account.currency);
+      // Se convierte a USD con la cotización actual (no la histórica de cada día).
+      const toUsd = (v: number) => v / fx.rate;
+      return json({
+        ads: ads.map((a) => ({ ...a, spend: toUsd(a.spend), purchase_value: toUsd(a.purchase_value) })),
+        fx: { from: account.currency, rate: fx.rate, source: fx.source },
+      });
     }
 
     return json({ error: "mode desconocido" }, 400);

@@ -22,4 +22,7 @@ export type AdRow = {
   leads: number;
 };
 
+// Cotización usada para pasar los montos a USD.
+export type Fx = { from: string; rate: number; source: string };
+
 export type ConversionType = "purchases" | "leads";

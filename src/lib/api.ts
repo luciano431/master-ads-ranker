@@ -1,4 +1,4 @@
-import type { Account, AdRow } from "./types";
+import type { Account, AdRow, Fx } from "./types";
 import { MOCK_ACCOUNTS, mockAds } from "./mock";
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -27,11 +27,13 @@ export async function fetchAccounts(): Promise<Account[]> {
   return accounts;
 }
 
-export async function fetchAds(accountId: string, since: string, until: string, days: number): Promise<AdRow[]> {
+export type AdsResponse = { ads: AdRow[]; fx: Fx };
+
+// Los montos (spend, purchase_value) ya llegan convertidos a USD.
+export async function fetchAds(accountId: string, since: string, until: string, days: number): Promise<AdsResponse> {
   if (USE_MOCK) {
     await new Promise((r) => setTimeout(r, 300));
-    return mockAds(accountId, days);
+    return { ads: mockAds(accountId, days), fx: { from: "USD", rate: 1, source: "USD" } };
   }
-  const { ads } = await call<{ ads: AdRow[] }>({ mode: "ads", account_id: accountId, since, until });
-  return ads;
+  return call<AdsResponse>({ mode: "ads", account_id: accountId, since, until });
 }

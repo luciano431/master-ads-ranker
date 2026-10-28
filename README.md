@@ -47,7 +47,11 @@ Secretos que usa:
 |---|---|---|
 | `META_ACCESS_TOKEN` | sí | Ya existe en el proyecto actual |
 | `META_API_VERSION` | no | Versión de la Graph API (por defecto `v23.0`) |
-| `ALLOWED_ACCOUNT_IDS` | no | Lista `act_1,act_2` para limitar qué cuentas se pueden consultar |
+| `META_BUSINESS_NAME` | no | Portfolio cuyas cuentas se muestran (por defecto `Ranker Studio`) |
+| `META_BUSINESS_ID` | no | ID del portfolio; si está, se usa en vez del nombre |
+| `ARS_USD_RATE_TYPE` | no | Dólar para convertir ARS: `oficial` (por defecto), `blue`, `bolsa` (MEP), `contadoconliqui`, `tarjeta` |
+
+Solo se listan y se pueden consultar las cuentas del portfolio (propias + de clientes). Todos los montos se muestran en USD, convertidos con la cotización del día (ARS vía dolarapi.com, otras monedas vía open.er-api.com).
 
 ### API
 

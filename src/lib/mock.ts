@@ -3,8 +3,8 @@ import type { Account, AdRow } from "./types";
 // Datos de demo para desarrollar sin backend. Deterministas por cuenta/período.
 
 export const MOCK_ACCOUNTS: Account[] = [
-  { id: "act_1000000000001", name: "Demo Skincare", currency: "ARS", status: "active" },
-  { id: "act_1000000000002", name: "Demo Indumentaria", currency: "ARS", status: "active" },
+  { id: "act_1000000000001", name: "Demo Skincare", currency: "USD", status: "active" },
+  { id: "act_1000000000002", name: "Demo Indumentaria", currency: "USD", status: "active" },
 ];
 
 const NAMES = [
@@ -43,11 +43,11 @@ export function mockAds(accountId: string, days: number): AdRow[] {
   const rand = rng(hash(accountId));
   return NAMES.map((name, i) => {
     const isVideo = name.startsWith("Video");
-    const spend = Math.round(rand() * 6000 * days) + 2000;
+    const spend = Math.round(rand() * 60 * days) + 20;
     const impressions = Math.round(spend * (8 + rand() * 10));
     const link_clicks = Math.round(impressions * (0.006 + rand() * 0.022));
-    const purchases = Math.round(spend / (8000 + rand() * 14000));
-    const purchase_value = Math.round(purchases * (25000 + rand() * 30000));
+    const purchases = Math.round(spend / (8 + rand() * 14));
+    const purchase_value = Math.round(purchases * (25 + rand() * 30));
     return {
       ad_id: `${accountId}-${i}`,
       ad_name: name,
