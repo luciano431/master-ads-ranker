@@ -1,0 +1,87 @@
+import type { AdRow, ConversionType } from "./types";
+
+export type MetricKey =
+  | "spend"
+  | "revenue"
+  | "roas"
+  | "cpa"
+  | "conversions"
+  | "impressions"
+  | "ctr"
+  | "cpc";
+
+export type Ad = AdRow & {
+  revenue: number;
+  conversions: number;
+  roas: number | null;
+  cpa: number | null;
+  ctr: number | null;
+  cpc: number | null;
+};
+
+type Format = "money" | "ratio" | "percent" | "int";
+
+export const METRICS: Record<MetricKey, { label: string; format: Format; higherIsBetter: boolean }> = {
+  spend: { label: "Spend", format: "money", higherIsBetter: true },
+  revenue: { label: "Revenue", format: "money", higherIsBetter: true },
+  roas: { label: "ROAS", format: "ratio", higherIsBetter: true },
+  cpa: { label: "CPA", format: "money", higherIsBetter: false },
+  conversions: { label: "Conv.", format: "int", higherIsBetter: true },
+  impressions: { label: "Impresiones", format: "int", higherIsBetter: true },
+  ctr: { label: "CTR", format: "percent", higherIsBetter: true },
+  cpc: { label: "CPC", format: "money", higherIsBetter: false },
+};
+
+export const METRIC_KEYS = Object.keys(METRICS) as MetricKey[];
+
+const div = (a: number, b: number) => (b > 0 ? a / b : null);
+
+// CTR y CPC usan link clicks (inline_link_clicks), no `clicks` crudo.
+export function deriveAd(row: AdRow, conversion: ConversionType): Ad {
+  const conversions = conversion === "purchases" ? row.purchases : row.leads;
+  const revenue = row.purchase_value;
+  return {
+    ...row,
+    revenue,
+    conversions,
+    roas: div(revenue, row.spend),
+    cpa: div(row.spend, conversions),
+    ctr: row.impressions > 0 ? (row.link_clicks / row.impressions) * 100 : null,
+    cpc: div(row.spend, row.link_clicks),
+  };
+}
+
+// ROAS promedio = revenue total / gasto total (ponderado por gasto),
+// no el promedio simple de los ROAS de cada anuncio.
+export function summarize(ads: Ad[]) {
+  const spend = ads.reduce((s, a) => s + a.spend, 0);
+  const revenue = ads.reduce((s, a) => s + a.revenue, 0);
+  const conversions = ads.reduce((s, a) => s + a.conversions, 0);
+  return {
+    count: ads.filter((a) => a.impressions > 0).length,
+    spend,
+    revenue,
+    conversions,
+    roas: div(revenue, spend),
+    cpa: div(spend, conversions),
+  };
+}
+
+export function formatMetric(key: MetricKey, value: number | null, currency: string, compact = false) {
+  if (value === null || !Number.isFinite(value)) return "—";
+  switch (METRICS[key].format) {
+    case "money":
+      return new Intl.NumberFormat("es-AR", {
+        style: "currency",
+        currency,
+        maximumFractionDigits: compact || value >= 1000 ? 0 : 2,
+        notation: compact ? "compact" : "standard",
+      }).format(value);
+    case "ratio":
+      return `${value.toFixed(2)}x`;
+    case "percent":
+      return `${value.toFixed(2)}%`;
+    case "int":
+      return new Intl.NumberFormat("es-AR", { notation: compact ? "compact" : "standard" }).format(value);
+  }
+}
