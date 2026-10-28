@@ -16,6 +16,12 @@ const NAMES = [
   "Video - Green screen", "Imagen - Lanzamiento", "Video_Comparativa", "Imagen - Cupón",
 ];
 
+const CAMPAIGNS = [
+  { name: "[CONV] Prospecting - Advantage+", adsets: ["Broad 25-55", "Intereses skincare"] },
+  { name: "[CONV] Retargeting 30d", adsets: ["Visitantes web", "Carrito abandonado"] },
+  { name: "[TOF] Video views", adsets: ["Lookalike 1% compradores"] },
+];
+
 function rng(seed: number) {
   return () => {
     seed = (seed * 1664525 + 1013904223) % 4294967296;
@@ -48,9 +54,16 @@ export function mockAds(accountId: string, days: number): AdRow[] {
     const link_clicks = Math.round(impressions * (0.006 + rand() * 0.022));
     const purchases = Math.round(spend / (8 + rand() * 14));
     const purchase_value = Math.round(purchases * (25 + rand() * 30));
+    const c = CAMPAIGNS[i % CAMPAIGNS.length];
+    const cIdx = i % CAMPAIGNS.length;
+    const sIdx = Math.floor(i / CAMPAIGNS.length) % c.adsets.length;
     return {
       ad_id: `${accountId}-${i}`,
       ad_name: name,
+      campaign_id: `${accountId}-c${cIdx}`,
+      campaign_name: c.name,
+      adset_id: `${accountId}-c${cIdx}-s${sIdx}`,
+      adset_name: c.adsets[sIdx],
       status: rand() > 0.25 ? "ACTIVE" : "ADSET_PAUSED",
       preview_url: null,
       thumbnail_url: thumb(i, name.replace(/^(Video|Imagen|Carrusel)[ _-]+/, "").slice(0, 2).toUpperCase()),

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, RefreshCw, Table2 } from "lucide-react";
+import { BarChart3, RefreshCw, Table2, X } from "lucide-react";
 import { PageHeader } from "../components/PageHeader";
 import { CreativeChart } from "../components/CreativeChart";
 import { CreativeTable } from "../components/CreativeTable";
 import { fetchAccounts, fetchAds } from "../lib/api";
 import { PERIODS, periodRange, type Period } from "../lib/dates";
-import { deriveAd, formatMetric, METRIC_KEYS, METRICS, summarize, type MetricKey } from "../lib/metrics";
+import { deriveAd, formatMetric, groupOptions, METRIC_KEYS, METRICS, summarize, type MetricKey } from "../lib/metrics";
 import type { ConversionType } from "../lib/types";
 import { useAsync } from "../lib/useAsync";
 
@@ -20,6 +20,14 @@ export function CreativeAnalyticsPage() {
   const [topN, setTopN] = useState<number>(20);
   const [view, setView] = useState<"chart" | "table">("chart");
   const [conversion, setConversion] = useState<ConversionType>("purchases");
+  const [campaignId, setCampaignId] = useState("");
+  const [adsetId, setAdsetId] = useState("");
+
+  // Campaña/conjunto son de una cuenta: al cambiar de cuenta se limpian.
+  useEffect(() => {
+    setCampaignId("");
+    setAdsetId("");
+  }, [accountId]);
 
   useEffect(() => {
     if (!accountId && accounts.data?.length) setAccountId(accounts.data[0].id);
@@ -35,7 +43,21 @@ export function CreativeAnalyticsPage() {
   );
   const fx = ads.data?.fx;
 
-  const derived = useMemo(() => (ads.data?.ads ?? []).map((r) => deriveAd(r, conversion)), [ads.data, conversion]);
+  const all = useMemo(() => (ads.data?.ads ?? []).map((r) => deriveAd(r, conversion)), [ads.data, conversion]);
+
+  // Si la campaña/conjunto elegido no tiene entrega en el nuevo período, se ignora el filtro.
+  const campaigns = useMemo(() => groupOptions(all, "campaign_id", "campaign_name"), [all]);
+  const activeCampaign = campaigns.some((c) => c.id === campaignId) ? campaignId : "";
+  const inCampaign = useMemo(
+    () => (activeCampaign ? all.filter((a) => a.campaign_id === activeCampaign) : all),
+    [all, activeCampaign],
+  );
+  const adsets = useMemo(() => groupOptions(inCampaign, "adset_id", "adset_name"), [inCampaign]);
+  const activeAdset = adsets.some((s) => s.id === adsetId) ? adsetId : "";
+  const derived = useMemo(
+    () => (activeAdset ? inCampaign.filter((a) => a.adset_id === activeAdset) : inCampaign),
+    [inCampaign, activeAdset],
+  );
   const summary = useMemo(() => summarize(derived), [derived]);
   const top = useMemo(() => [...derived].sort((a, b) => b.spend - a.spend).slice(0, topN), [derived, topN]);
 
@@ -92,6 +114,39 @@ export function CreativeAnalyticsPage() {
         >
           <RefreshCw size={16} className={ads.loading ? "animate-spin" : ""} />
         </button>
+      </section>
+
+      <section className="mb-4 flex flex-wrap items-center gap-3">
+        <FilterSelect
+          label="Campaña"
+          value={activeCampaign}
+          onChange={(v) => {
+            setCampaignId(v);
+            setAdsetId("");
+          }}
+          allLabel={`Todas las campañas (${campaigns.length})`}
+          options={campaigns}
+          currency={currency}
+        />
+        <FilterSelect
+          label="Conjunto"
+          value={activeAdset}
+          onChange={setAdsetId}
+          allLabel={`Todos los conjuntos (${adsets.length})`}
+          options={adsets}
+          currency={currency}
+        />
+        {(activeCampaign || activeAdset) && (
+          <button
+            onClick={() => {
+              setCampaignId("");
+              setAdsetId("");
+            }}
+            className="text-muted hover:text-ink flex items-center gap-1 text-sm"
+          >
+            <X size={14} /> Limpiar filtros
+          </button>
+        )}
       </section>
 
       {(accounts.error || ads.error) && (
@@ -164,6 +219,40 @@ export function CreativeAnalyticsPage() {
         </div>
       </section>
     </>
+  );
+}
+
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  allLabel,
+  options,
+  currency,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  allLabel: string;
+  options: { id: string; name: string; spend: number }[];
+  currency: string;
+}) {
+  return (
+    <label className="border-line bg-panel flex w-full min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5 sm:w-auto sm:max-w-md">
+      <span className="text-muted shrink-0 text-xs font-semibold tracking-wider uppercase">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`min-w-0 flex-1 truncate bg-transparent py-0.5 text-sm ${value ? "text-m1 font-medium" : "text-ink"}`}
+      >
+        <option value="" className="bg-panel-2 text-ink">{allLabel}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id} className="bg-panel-2 text-ink">
+            {o.name} · {formatMetric("spend", o.spend, currency)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

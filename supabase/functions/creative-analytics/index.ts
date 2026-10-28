@@ -167,7 +167,7 @@ async function usdRate(currency: string) {
 async function listAds(accountId: string, since: string, until: string) {
   const insights = await graphAll(`${accountId}/insights`, {
     level: "ad",
-    fields: "ad_id,ad_name,spend,impressions,inline_link_clicks,actions,action_values",
+    fields: "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,inline_link_clicks,actions,action_values",
     time_range: JSON.stringify({ since, until }),
     limit: "500",
   });
@@ -180,6 +180,10 @@ async function listAds(accountId: string, since: string, until: string) {
     return {
       ad_id: r.ad_id as string,
       ad_name: r.ad_name as string,
+      campaign_id: r.campaign_id as string,
+      campaign_name: r.campaign_name as string,
+      adset_id: r.adset_id as string,
+      adset_name: r.adset_name as string,
       status: (ad.effective_status ?? "UNKNOWN") as string,
       preview_url: (ad.preview_shareable_link ?? null) as string | null,
       thumbnail_url: (creative.thumbnail_url ?? creative.image_url ?? null) as string | null,
@@ -224,7 +228,7 @@ Deno.serve(async (req) => {
       const account = accounts.find((a) => a.id === id);
       if (!account) return json({ error: "La cuenta no pertenece al portfolio" }, 403);
 
-      const ads = await cached(`ads:${id}:${since}:${until}`, () => listAds(id, since, until));
+      const ads = await cached(`ads:v2:${id}:${since}:${until}`, () => listAds(id, since, until));
       const fx = await usdRate(account.currency);
       // Se convierte a USD con la cotización actual (no la histórica de cada día).
       const toUsd = (v: number) => v / fx.rate;

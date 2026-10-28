@@ -9,6 +9,10 @@ export type Account = {
 export type AdRow = {
   ad_id: string;
   ad_name: string;
+  campaign_id: string;
+  campaign_name: string;
+  adset_id: string;
+  adset_name: string;
   status: string;
   preview_url: string | null;
   thumbnail_url: string | null;

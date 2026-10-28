@@ -85,3 +85,14 @@ export function formatMetric(key: MetricKey, value: number | null, currency: str
       return new Intl.NumberFormat("es-AR", { notation: compact ? "compact" : "standard" }).format(value);
   }
 }
+
+// Opciones de filtro (campañas o conjuntos) ordenadas por gasto, a partir de los anuncios.
+export function groupOptions(ads: Ad[], idKey: "campaign_id" | "adset_id", nameKey: "campaign_name" | "adset_name") {
+  const map = new Map<string, { id: string; name: string; spend: number }>();
+  for (const a of ads) {
+    const g = map.get(a[idKey]) ?? { id: a[idKey], name: a[nameKey], spend: 0 };
+    g.spend += a.spend;
+    map.set(a[idKey], g);
+  }
+  return [...map.values()].sort((a, b) => b.spend - a.spend);
+}
