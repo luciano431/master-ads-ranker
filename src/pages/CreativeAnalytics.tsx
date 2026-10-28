@@ -175,7 +175,8 @@ export function CreativeAnalyticsPage() {
             aria-label="Tipo de conversión"
           >
             <option value="purchases">Conversión: compras</option>
-            <option value="leads">Conversión: leads</option>
+            <option value="leads">Conversión: leads (form + landing)</option>
+            <option value="messages">Conversión: mensajes</option>
           </select>
 
           <div className="ml-auto flex items-center gap-3">

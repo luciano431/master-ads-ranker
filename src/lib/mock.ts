@@ -75,6 +75,7 @@ export function mockAds(accountId: string, days: number): AdRow[] {
       purchases,
       purchase_value,
       leads: Math.round(link_clicks * (0.02 + rand() * 0.08)),
+      messages: Math.round(link_clicks * (0.03 + rand() * 0.1)),
     };
   });
 }

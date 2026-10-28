@@ -38,7 +38,7 @@ const div = (a: number, b: number) => (b > 0 ? a / b : null);
 
 // CTR y CPC usan link clicks (inline_link_clicks), no `clicks` crudo.
 export function deriveAd(row: AdRow, conversion: ConversionType): Ad {
-  const conversions = conversion === "purchases" ? row.purchases : row.leads;
+  const conversions = row[conversion];
   const revenue = row.purchase_value;
   return {
     ...row,

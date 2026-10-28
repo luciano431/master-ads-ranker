@@ -6,7 +6,7 @@ import type { AdRow } from "./types";
 const row = (over: Partial<AdRow> = {}): AdRow => ({
   ad_id: "1", ad_name: "a", campaign_id: "c", campaign_name: "C", adset_id: "s", adset_name: "S", status: "ACTIVE", preview_url: null, thumbnail_url: null,
   object_type: null, is_video: false, spend: 100, impressions: 10000, link_clicks: 200,
-  purchases: 4, purchase_value: 500, leads: 20, ...over,
+  purchases: 4, purchase_value: 500, leads: 20, messages: 10, ...over,
 });
 
 describe("deriveAd", () => {
@@ -18,8 +18,9 @@ describe("deriveAd", () => {
     expect(ad.cpc).toBe(0.5);
   });
 
-  it("usa leads como conversión cuando se elige", () => {
+  it("usa leads o mensajes como conversión cuando se elige", () => {
     expect(deriveAd(row(), "leads").cpa).toBe(5);
+    expect(deriveAd(row(), "messages").cpa).toBe(10);
   });
 
   it("devuelve null en vez de dividir por cero", () => {

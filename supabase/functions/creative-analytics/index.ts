@@ -33,10 +33,16 @@ const PURCHASE_TYPES = [
   "offsite_conversion.fb_pixel_purchase",
   "onsite_web_purchase",
 ];
+// Leads: formularios instantáneos + leads del pixel en landing ("lead" es el agregado de Meta).
 const LEAD_TYPES = [
   "lead",
   "onsite_conversion.lead_grouped",
   "offsite_conversion.fb_pixel_lead",
+];
+// Mensajes: conversaciones iniciadas (WhatsApp, Messenger, Instagram Direct). Separado de leads.
+const MESSAGE_TYPES = [
+  "onsite_conversion.messaging_conversation_started_7d",
+  "onsite_conversion.total_messaging_connection",
 ];
 
 type Action = { action_type: string; value: string };
@@ -195,6 +201,7 @@ async function listAds(accountId: string, since: string, until: string) {
       purchases: pick(r.actions, PURCHASE_TYPES),
       purchase_value: pick(r.action_values, PURCHASE_TYPES),
       leads: pick(r.actions, LEAD_TYPES),
+      messages: pick(r.actions, MESSAGE_TYPES),
     };
   });
 }
@@ -228,7 +235,7 @@ Deno.serve(async (req) => {
       const account = accounts.find((a) => a.id === id);
       if (!account) return json({ error: "La cuenta no pertenece al portfolio" }, 403);
 
-      const ads = await cached(`ads:v2:${id}:${since}:${until}`, () => listAds(id, since, until));
+      const ads = await cached(`ads:v3:${id}:${since}:${until}`, () => listAds(id, since, until));
       const fx = await usdRate(account.currency);
       // Se convierte a USD con la cotización actual (no la histórica de cada día).
       const toUsd = (v: number) => v / fx.rate;
